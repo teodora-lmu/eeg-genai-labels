@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>AI Image Rating</title>
+  <title>AI Image Rating Task</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -27,56 +27,149 @@
     #slider {
       width: 100%;
     }
-    .slider-value {
-      font-weight: bold;
-      text-align: center;
-      margin-top: 5px;
+    #nextButton:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+    #progress {
+      font-size: 0.9em;
+      color: #333;
+      margin-bottom: 10px;
+      text-align: right;
+    }
+    .hidden {
+      display: none;
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h2>Rate the Image</h2>
-    <img id="imageToRate" src="woman_0051.jpg" alt="To be rated">
+    <!-- Rating Interface -->
+    <div id="ratingInterface">
+      <div id="progress">Image 1 of X</div>
+      <img id="imageToRate" src="" alt="Image to rate">
 
-    <p><strong>The image has been created using generative AI.</strong></p>
+      <p><strong>The image has been created using generative AI.</strong></p>
 
-    <div class="slider-labels">
-      <span>Strongly Disagree</span>
-      <span>Strongly Agree</span>
+      <div class="slider-labels">
+        <span>Strongly Disagree</span>
+        <span>Strongly Agree</span>
+      </div>
+      <input type="range" id="slider" min="1" max="100" value="50">
+
+      <br><br>
+      <label><strong>The image is AI-generated:</strong></label><br>
+      <input type="radio" id="aiYes" name="aiGuess" value="Yes">
+      <label for="aiYes">Yes</label><br>
+      <input type="radio" id="aiNo" name="aiGuess" value="No">
+      <label for="aiNo">No</label>
+
+      <br><br>
+      <button id="nextButton" onclick="submitResponse()" disabled>Next Image</button>
     </div>
-    <input type="range" id="slider" min="1" max="100" value="50" oninput="updateValue(this.value)">
-    <div class="slider-value" id="sliderValue">50</div>
 
-    <br><br>
-    <label><strong>The image is AI-generated:</strong></label><br>
-    <input type="radio" id="aiYes" name="aiGuess" value="Yes">
-    <label for="aiYes">Yes</label><br>
-    <input type="radio" id="aiNo" name="aiGuess" value="No">
-    <label for="aiNo">No</label>
-
-    <br><br>
-    <button onclick="submitData()">Submit</button>
+    <!-- Confirmation Page -->
+    <div id="confirmationPage" class="hidden">
+      <h2>Thank you!</h2>
+      <p>You have rated all images. Please continue to the next page.</p>
+    </div>
   </div>
 
   <script>
-    function updateValue(val) {
-      document.getElementById("sliderValue").innerText = val;
+    const imagePaths = [
+      "stimuli/ai_generated/man_filtered/asian/1.jpg",
+      "stimuli/ai_generated/man_filtered/black/1.jpg",
+      "stimuli/ai_generated/man_filtered/latino/1.jpg",
+      "stimuli/ai_generated/man_filtered/white/1.jpg"
+      // Add all other image paths here
+    ];
+
+    const shuffledImages = imagePaths.sort(() => 0.5 - Math.random());
+    const totalImages = shuffledImages.length;
+    const defaultSliderValue = 50;
+    let currentIndex = 0;
+    let startTime = null;
+
+    const participantId = getProlificID();
+    const responseData = {
+      participant_id: participantId,
+      responses: []
+    };
+
+    function getProlificID() {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get("PROLIFIC_PID") || "unknown";
     }
 
-    function submitData() {
-      const rating = document.getElementById("slider").value;
-      const aiGuess = document.querySelector('input[name="aiGuess"]:checked');
-      const aiValue = aiGuess ? aiGuess.value : "";
+    function updateProgress() {
+      document.getElementById("progress").innerText =
+        `Image ${currentIndex + 1} of ${totalImages}`;
+      document.getElementById("nextButton").textContent =
+        (currentIndex === totalImages - 1) ? "Finish" : "Next Image";
+    }
 
-      if (window.parent && window.parent.Qualtrics) {
-        window.parent.Qualtrics.SurveyEngine.setEmbeddedData("rating", rating);
-        window.parent.Qualtrics.SurveyEngine.setEmbeddedData("aiGuess", aiValue);
-        window.parent.Qualtrics.SurveyEngine.setEmbeddedData("imageId", "woman_0051.jpg");
+    function checkInputCompletion() {
+      const sliderMoved = document.getElementById("slider").value != defaultSliderValue;
+      const radioSelected = !!document.querySelector('input[name="aiGuess"]:checked');
+      document.getElementById("nextButton").disabled = !(sliderMoved && radioSelected);
+    }
+
+    function loadNextImage() {
+      if (currentIndex >= totalImages) {
+        showConfirmationPage();
+        return;
       }
 
-      alert("Response submitted!");
+      document.getElementById("imageToRate").src = shuffledImages[currentIndex];
+      document.getElementById("slider").value = defaultSliderValue;
+      document.querySelectorAll('input[name="aiGuess"]').forEach(el => el.checked = false);
+      document.getElementById("nextButton").disabled = true;
+
+      startTime = Date.now();
+      updateProgress();
     }
+
+    function showConfirmationPage() {
+      document.getElementById("ratingInterface").classList.add("hidden");
+      document.getElementById("confirmationPage").classList.remove("hidden");
+
+      if (window.parent && window.parent.Qualtrics) {
+        const jsonStr = JSON.stringify(responseData);
+        const q = window.parent.Qualtrics.SurveyEngine;
+        q.setEmbeddedData("response_data", jsonStr);
+        q.setEmbeddedData("participant_id", participantId);
+        q.showNextButton();  // Show Qualtrics arrow again
+      }
+    }
+
+    function submitResponse() {
+      const endTime = Date.now();
+      const timeTaken = ((endTime - startTime) / 1000).toFixed(2);
+      const sliderValue = document.getElementById("slider").value;
+      const aiGuess = document.querySelector('input[name="aiGuess"]:checked')?.value;
+      const imageShown = shuffledImages[currentIndex];
+      const groundTruth = imageShown.includes("ai_generated") ? "Yes" : "No";
+      const isCorrect = aiGuess === groundTruth;
+
+      responseData.responses.push({
+        image: imageShown,
+        rating: sliderValue,
+        aiGuess: aiGuess,
+        correct: isCorrect,
+        time: parseFloat(timeTaken)
+      });
+
+      currentIndex++;
+      loadNextImage();
+    }
+
+    window.onload = function () {
+      loadNextImage();
+      document.getElementById("slider").addEventListener("input", checkInputCompletion);
+      document.querySelectorAll('input[name="aiGuess"]').forEach(el =>
+        el.addEventListener("change", checkInputCompletion)
+      );
+    };
   </script>
 </body>
 </html>
