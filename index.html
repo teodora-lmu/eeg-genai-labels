@@ -2,6 +2,7 @@
 <html>
 <head>
   <title>AI Image Rating Task</title>
+  <meta charset="UTF-8">
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -44,7 +45,7 @@
 </head>
 <body>
   <div class="container">
-    <!-- Rating Interface -->
+    <!-- Task UI -->
     <div id="ratingInterface">
       <div id="progress">Image 1 of X</div>
       <img id="imageToRate" src="" alt="Image to rate">
@@ -68,10 +69,10 @@
       <button id="nextButton" onclick="submitResponse()" disabled>Next Image</button>
     </div>
 
-    <!-- Confirmation Page -->
+    <!-- Confirmation -->
     <div id="confirmationPage" class="hidden">
       <h2>Thank you!</h2>
-      <p>You have rated all images. Please continue to the next page.</p>
+      <p>You have rated all images. Please click the arrow below to continue.</p>
     </div>
   </div>
 
@@ -81,7 +82,7 @@
       "stimuli/ai_generated/man_filtered/black/1.jpg",
       "stimuli/ai_generated/man_filtered/latino/1.jpg",
       "stimuli/ai_generated/man_filtered/white/1.jpg"
-      // Add all other image paths here
+      // Add all image paths you want here
     ];
 
     const shuffledImages = imagePaths.sort(() => 0.5 - Math.random());
@@ -133,13 +134,11 @@
       document.getElementById("ratingInterface").classList.add("hidden");
       document.getElementById("confirmationPage").classList.remove("hidden");
 
-      if (window.parent && window.parent.Qualtrics) {
-        const jsonStr = JSON.stringify(responseData);
-        const q = window.parent.Qualtrics.SurveyEngine;
-        q.setEmbeddedData("response_data", jsonStr);
-        q.setEmbeddedData("participant_id", participantId);
-        q.showNextButton();  // Show Qualtrics arrow again
-      }
+      // Send the full JSON to Qualtrics
+      window.parent.postMessage({
+        type: "ai_image_rating_data",
+        payload: responseData
+      }, "*");
     }
 
     function submitResponse() {
