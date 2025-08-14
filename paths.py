@@ -1,6 +1,6 @@
 import os
 
-base = 'stimuli/ai_generated/woman_filtered'
+base = 'stimuli/ai_generated/man_filtered'
 ethnicities = ['asian', 'black', 'latino', 'white']
 
 paths = []
