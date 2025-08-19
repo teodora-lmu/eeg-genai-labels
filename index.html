@@ -65,12 +65,12 @@
       </div>
       <input type="range" id="confidenceSlider" min="1" max="100" value="50">
 
-      <br><br>
+    <!--  <br><br>
       <label><strong>The image is AI-generated:</strong></label><br>
       <input type="radio" id="aiYes" name="aiGuess" value="Yes">
       <label for="aiYes">Yes</label><br>
       <input type="radio" id="aiNo" name="aiGuess" value="No">
-      <label for="aiNo">No</label>
+      <label for="aiNo">No</label> -->
 
       <br><br>
       <button id="nextButton" onclick="submitResponse()" disabled>Next Image</button>
@@ -429,7 +429,7 @@
     function checkInputCompletion() {
       const ratingMoved = document.getElementById("slider").value != defaultSliderValue;
       const confidenceMoved = document.getElementById("confidenceSlider").value != defaultSliderValue;
-      const radioSelected = !!document.querySelector('input[name="aiGuess"]:checked');
+    //*  const radioSelected = !!document.querySelector('input[name="aiGuess"]:checked');
       document.getElementById("nextButton").disabled = !(ratingMoved && confidenceMoved && radioSelected);
     }
 
@@ -442,7 +442,7 @@
       document.getElementById("imageToRate").src = shuffledImages[currentIndex];
       document.getElementById("slider").value = defaultSliderValue;
       document.getElementById("confidenceSlider").value = defaultSliderValue;
-      document.querySelectorAll('input[name="aiGuess"]').forEach(el => el.checked = false);
+    //*  document.querySelectorAll('input[name="aiGuess"]').forEach(el => el.checked = false);
       document.getElementById("nextButton").disabled = true;
 
       startTime = Date.now();
@@ -466,7 +466,7 @@
 
       const sliderValue = document.getElementById("slider").value;
       const confidenceValue = document.getElementById("confidenceSlider").value;
-      const aiGuess = document.querySelector('input[name="aiGuess"]:checked')?.value;
+     //* const aiGuess = document.querySelector('input[name="aiGuess"]:checked')?.value;
       const imageShown = shuffledImages[currentIndex];
       const groundTruth = imageShown.includes("ai_generated") ? "Yes" : "No";
       const isCorrect = aiGuess === groundTruth;
@@ -475,7 +475,7 @@
         image: imageShown,
         rating: sliderValue,
         confidence: confidenceValue,
-        aiGuess: aiGuess,
+      //*  aiGuess: aiGuess,
         correct: isCorrect,
         time: parseFloat(timeTaken)
       });
@@ -488,9 +488,9 @@
       loadNextImage();
       document.getElementById("slider").addEventListener("input", checkInputCompletion);
       document.getElementById("confidenceSlider").addEventListener("input", checkInputCompletion);
-      document.querySelectorAll('input[name="aiGuess"]').forEach(el =>
+    /*  document.querySelectorAll('input[name="aiGuess"]').forEach(el =>
         el.addEventListener("change", checkInputCompletion)
-      );
+      ); */
     };
   </script>
 </body>
