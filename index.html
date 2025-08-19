@@ -470,14 +470,14 @@
      //* const aiGuess = document.querySelector('input[name="aiGuess"]:checked')?.value;
       const imageShown = shuffledImages[currentIndex];
       const groundTruth = imageShown.includes("ai_generated") ? "Yes" : "No";
-      const isCorrect = aiGuess === groundTruth;
+    //*  const isCorrect = aiGuess === groundTruth;
 
       responseData.responses.push({
         image: imageShown,
         rating: sliderValue,
         confidence: confidenceValue,
       //*  aiGuess: aiGuess,
-        correct: isCorrect,
+      //*  correct: isCorrect,
         time: parseFloat(timeTaken)
       });
 
