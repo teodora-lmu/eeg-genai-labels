@@ -430,7 +430,8 @@
       const ratingMoved = document.getElementById("slider").value != defaultSliderValue;
       const confidenceMoved = document.getElementById("confidenceSlider").value != defaultSliderValue;
     //*  const radioSelected = !!document.querySelector('input[name="aiGuess"]:checked');
-      document.getElementById("nextButton").disabled = !(ratingMoved && confidenceMoved && radioSelected);
+      document.getElementById("nextButton").disabled = !(ratingMoved && confidenceMoved );
+   //*   document.getElementById("nextButton").disabled = !(ratingMoved && confidenceMoved && radioSelected);
     }
 
     function loadNextImage() {
