@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>AI Image Rating Task</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    .container { max-width: 700px; margin: auto; }
+    img { width: 100%; max-height: 320px; object-fit: contain; margin-bottom: 20px; border-radius: 6px; }
+    .slider-labels { display: flex; justify-content: space-between; font-size: 0.9em; color: #555; margin-bottom: 6px; }
+    #slider, #confidenceSlider { width: 100%; }
+    #nextButton { padding: 10px 16px; font-size: 1rem; border: none; border-radius: 6px; background: #2d6cdf; color: #fff; }
+    #nextButton:disabled { background-color: #ccc; cursor: not-allowed; }
+    #progress { font-size: 0.9em; color: #333; margin-bottom: 10px; text-align: right; }
+    .hidden { display: none; }
+    .note { font-size: 0.9em; color: #555; margin-bottom: 8px; }
+  </style>
+
+  <!-- Firebase (single module block: init + helpers) -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+    import { getFirestore, doc, getDoc, setDoc, runTransaction } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+    // 🔧 REPLACE WITH YOUR CONFIG (yours below looks fine)
+    const firebaseConfig = {
+      apiKey: "AIzaSyDZ2S2cdztJc7Xh9PKBHHtSJP5Z-ZitRHY",
+      authDomain: "ai-labels-4a313.firebaseapp.com",
+      projectId: "ai-labels-4a313",
+    };
+
+    // Init
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    // Expose for non-module scripts
+    window.__FIREBASE__ = { db, auth, onAuthStateChanged, signInAnonymously };
+
+    // Firestore helpers (✅ define ONCE)
+    window.__FS_HELPERS__ = {
+      imageDoc: (path) => doc(db, "imageCounts", encodeURIComponent(path)),
+      ensureImageDoc: async (path) => {
+        const d = doc(db, "imageCounts", encodeURIComponent(path));
+        const snap = await getDoc(d);
+        if (!snap.exists()) {
+          await setDoc(d, { count: 0, raters: {} }, { merge: true });
+          return { count: 0, raters: {} };
+        }
+        return snap.data();
+      },
+      reserveImage: async (path, participantId, cap = 30) => {
+        const d = doc(db, "imageCounts", encodeURIComponent(path));
+        return runTransaction(db, async (tx) => {
+          const snap = await tx.get(d);
+          const data = snap.exists() ? snap.data() : { count: 0, raters: {} };
+
+          // If this participant already counted, don't increment; still allow showing.
+          if (data.raters && data.raters[participantId]) {
+            return { ok: true, alreadyCounted: true, count: data.count || 0 };
+          }
+          if ((data.count || 0) >= cap) {
+            return { ok: false, reason: "full", count: data.count || 0 };
+          }
+          const newCount = (data.count || 0) + 1;
+          const newRaters = { ...(data.raters || {}), [participantId]: true };
+          tx.set(d, { count: newCount, raters: newRaters }, { merge: true });
+          return { ok: true, alreadyCounted: false, count: newCount };
+        });
+      }
+    };
+  </script>
+</head>
+<body>
+  <div class="container">
+    <div class="note">Target: <strong>30 ratings per image</strong>. Images stop showing once full.</div>
+    <div id="ratingInterface">
+      <div id="progress">Loading…</div>
+      <img id="imageToRate" src="" alt="Image to rate" />
+
+      <p><strong>This image was created with the help of generative AI.</strong></p>
+
+      <div class="slider-section">
+        <div class="slider-labels">
+          <span>Strongly Disagree</span>
+          <span>Strongly Agree</span>
+        </div>
+        <input type="range" id="slider" min="1" max="100" value="50" />
+      </div>
+
+      <br />
+      <label for="confidenceSlider"><strong>I am confident in my response.</strong></label>
+      <div class="slider-labels">
+        <span>Strongly Disagree</span>
+        <span>Strongly Agree</span>
+      </div>
+      <input type="range" id="confidenceSlider" min="1" max="100" value="50" />
+
+      <br /><br />
+      <button id="nextButton" disabled>Next Image</button>
+    </div>
+
+    <div id="confirmationPage" class="hidden">
+      <h2>Thank you!</h2>
+      <p>You have rated all available images. Please click the arrow below to continue.</p>
+    </div>
+  </div>
+
+  <!-- App logic -->
+  <script type="module">
+    // ========= Parameters =========
+    const TARGET_RATINGS = 30;
+    const PER_CELL = 5;
+
+    // 🔽 Put your full array here (paths relative to hosting root, e.g., public/stimuli/...)
+    const imagePaths = [
+    "stimuli/ai_generated/man_filtered/asian/man_1186.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_0223.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_0750.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_1116.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_0426.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_1077.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_0427.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_0433.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_0580.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_0146.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_0387.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_0233.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_0757.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_1215.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_0137.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_0296.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_0269.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_0255.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_0057.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_0243.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_1160.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_0054.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_0077.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_0739.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_0261.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_0470.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_0138.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_0258.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_1225.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_0098.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_1068.jpg",
+    "stimuli/ai_generated/man_filtered/asian/man_0904.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_1484.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_1123.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_1283.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_0758.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_0561.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_0367.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_0825.jpg",
+    "stimuli/ai_generated/man_filtered/asian/men_0548.jpg",
+    "stimuli/ai_generated/man_filtered/black/man_0887.jpg",
+    "stimuli/ai_generated/man_filtered/black/men_0182.jpg",
+    "stimuli/ai_generated/man_filtered/black/man_0886.jpg",
+    "stimuli/ai_generated/man_filtered/black/man_0516.jpg",
+    "stimuli/ai_generated/man_filtered/black/man_0700.jpg",
+    "stimuli/ai_generated/man_filtered/black/man_0701.jpg",
+    "stimuli/ai_generated/man_filtered/black/men_0379.jpg",
+    "stimuli/ai_generated/man_filtered/black/man_1140.jpg",
+    "stimuli/ai_generated/man_filtered/black/man_0921.jpg",
+    "stimuli/ai_generated/man_filtered/black/man_0909.jpg",
+    "stimuli/ai_generated/man_filtered/black/man_0841.jpg",
+    "stimuli/ai_generated/man_filtered/black/man_0897.jpg",
+    "stimuli/ai_generated/man_filtered/black/men_0409.jpg",
+    "stimuli/ai_generated/man_filtered/black/man_1127.jpg",
+    "stimuli/ai_generated/man_filtered/black/men_0082.jpg",
+    "stimuli/ai_generated/man_filtered/black/man_0993.jpg",
+    "stimuli/ai_generated/man_filtered/black/men_0524.jpg",
+    "stimuli/ai_generated/man_filtered/black/men_0242.jpg",
+    "stimuli/ai_generated/man_filtered/black/man_0941.jpg",
+    "stimuli/ai_generated/man_filtered/black/man_1069.jpg",
+    "stimuli/ai_generated/man_filtered/black/man_1056.jpg",
+    "stimuli/ai_generated/man_filtered/black/men_0249.jpg",
+    "stimuli/ai_generated/man_filtered/black/man_0597.jpg",
+    "stimuli/ai_generated/man_filtered/black/man_0583.jpg",
+    "stimuli/ai_generated/man_filtered/black/men_0511.jpg",
+    "stimuli/ai_generated/man_filtered/black/man_0592.jpg",
+    "stimuli/ai_generated/man_filtered/black/men_0313.jpg",
+    "stimuli/ai_generated/man_filtered/black/man_0587.jpg",
+    "stimuli/ai_generated/man_filtered/black/men_0070.jpg",
+    "stimuli/ai_generated/man_filtered/black/man_0593.jpg",
+    "stimuli/ai_generated/man_filtered/black/man_0963.jpg",
+    "stimuli/ai_generated/man_filtered/black/man_0584.jpg",
+    "stimuli/ai_generated/man_filtered/black/men_0410.jpg",
+    "stimuli/ai_generated/man_filtered/black/men_0407.jpg",
+    "stimuli/ai_generated/man_filtered/black/man_0899.jpg",
+    "stimuli/ai_generated/man_filtered/black/man_1006.jpg",
+    "stimuli/ai_generated/man_filtered/black/men_0358.jpg",
+    "stimuli/ai_generated/man_filtered/black/men_0198.jpg",
+    "stimuli/ai_generated/man_filtered/black/men_0005.jpg",
+    "stimuli/ai_generated/man_filtered/black/man_0861.jpg",
+    "stimuli/ai_generated/man_filtered/latino/men_0424.jpg",
+    "stimuli/ai_generated/man_filtered/latino/men_0949.jpg",
+    "stimuli/ai_generated/man_filtered/latino/men_1302.jpg",
+    "stimuli/ai_generated/man_filtered/latino/men_1470.jpg",
+    "stimuli/ai_generated/man_filtered/latino/man_0714.jpg",
+    "stimuli/ai_generated/man_filtered/latino/men_1063.jpg",
+    "stimuli/ai_generated/man_filtered/latino/men_0962.jpg",
+    "stimuli/ai_generated/man_filtered/latino/men_1073.jpg",
+    "stimuli/ai_generated/man_filtered/latino/men_0387.jpg",
+    "stimuli/ai_generated/man_filtered/latino/men_1299.jpg",
+    "stimuli/ai_generated/man_filtered/latino/man_0713.jpg",
+    "stimuli/ai_generated/man_filtered/latino/men_1228.jpg",
+    "stimuli/ai_generated/man_filtered/latino/men_1200.jpg",
+    "stimuli/ai_generated/man_filtered/latino/men_0444.jpg",
+    "stimuli/ai_generated/man_filtered/latino/man_0809.jpg",
+    "stimuli/ai_generated/man_filtered/latino/men_1367.jpg",
+    "stimuli/ai_generated/man_filtered/latino/men_1205.jpg",
+    "stimuli/ai_generated/man_filtered/latino/men_0261.jpg",
+    "stimuli/ai_generated/man_filtered/latino/man_0812.jpg",
+    "stimuli/ai_generated/man_filtered/latino/man_0608.jpg",
+    "stimuli/ai_generated/man_filtered/latino/men_1222.jpg",
+    "stimuli/ai_generated/man_filtered/latino/men_1141.jpg",
+    "stimuli/ai_generated/man_filtered/latino/men_0501.jpg",
+    "stimuli/ai_generated/man_filtered/latino/men_0515.jpg",
+    "stimuli/ai_generated/man_filtered/latino/man_0633.jpg",
+    "stimuli/ai_generated/man_filtered/latino/men_0110.jpg",
+    "stimuli/ai_generated/man_filtered/latino/man_0632.jpg",
+    "stimuli/ai_generated/man_filtered/latino/man_0630.jpg",
+    "stimuli/ai_generated/man_filtered/latino/men_0477.jpg",
+    "stimuli/ai_generated/man_filtered/latino/men_0503.jpg",
+    "stimuli/ai_generated/man_filtered/latino/men_0955.jpg",
+    "stimuli/ai_generated/man_filtered/latino/men_0606.jpg",
+    "stimuli/ai_generated/man_filtered/latino/men_1257.jpg",
+    "stimuli/ai_generated/man_filtered/latino/men_1337.jpg",
+    "stimuli/ai_generated/man_filtered/latino/men_0349.jpg",
+    "stimuli/ai_generated/man_filtered/latino/man_0907.jpg",
+    "stimuli/ai_generated/man_filtered/latino/men_0984.jpg",
+    "stimuli/ai_generated/man_filtered/latino/men_0367.jpg",
+    "stimuli/ai_generated/man_filtered/latino/men_1285.jpg",
+    "stimuli/ai_generated/man_filtered/latino/men_1118.jpg",
+    "stimuli/ai_generated/man_filtered/white/men_0237.jpg",
+    "stimuli/ai_generated/man_filtered/white/man_0703.jpg",
+    "stimuli/ai_generated/man_filtered/white/man_0103.jpg",
+    "stimuli/ai_generated/man_filtered/white/men_0147.jpg",
+    "stimuli/ai_generated/man_filtered/white/men_0032.jpg",
+    "stimuli/ai_generated/man_filtered/white/man_0712.jpg",
+    "stimuli/ai_generated/man_filtered/white/men_0435.jpg",
+    "stimuli/ai_generated/man_filtered/white/man_0061.jpg",
+    "stimuli/ai_generated/man_filtered/white/men_0233.jpg",
+    "stimuli/ai_generated/man_filtered/white/man_0166.jpg",
+    "stimuli/ai_generated/man_filtered/white/man_0164.jpg",
+    "stimuli/ai_generated/man_filtered/white/man_0161.jpg",
+    "stimuli/ai_generated/man_filtered/white/man_0149.jpg",
+    "stimuli/ai_generated/man_filtered/white/man_0217.jpg",
+    "stimuli/ai_generated/man_filtered/white/man_0162.jpg",
+    "stimuli/ai_generated/man_filtered/white/men_0513.jpg",
+    "stimuli/ai_generated/man_filtered/white/man_0344.jpg",
+    "stimuli/ai_generated/man_filtered/white/men_0466.jpg",
+    "stimuli/ai_generated/man_filtered/white/men_0248.jpg",
+    "stimuli/ai_generated/man_filtered/white/man_0218.jpg",
+    "stimuli/ai_generated/man_filtered/white/men_0316.jpg",
+    "stimuli/ai_generated/man_filtered/white/man_0636.jpg",
+    "stimuli/ai_generated/man_filtered/white/man_0179.jpg",
+    "stimuli/ai_generated/man_filtered/white/man_0596.jpg",
+    "stimuli/ai_generated/man_filtered/white/man_0169.jpg",
+    "stimuli/ai_generated/man_filtered/white/man_0633.jpg",
+    "stimuli/ai_generated/man_filtered/white/man_0356.jpg",
+    "stimuli/ai_generated/man_filtered/white/men_0272.jpg",
+    "stimuli/ai_generated/man_filtered/white/men_0064.jpg",
+    "stimuli/ai_generated/man_filtered/white/man_0156.jpg",
+    "stimuli/ai_generated/man_filtered/white/men_0112.jpg",
+    "stimuli/ai_generated/man_filtered/white/man_0285.jpg",
+    "stimuli/ai_generated/man_filtered/white/man_0292.jpg",
+    "stimuli/ai_generated/man_filtered/white/man_0293.jpg",
+    "stimuli/ai_generated/man_filtered/white/man_0042.jpg",
+    "stimuli/ai_generated/man_filtered/white/man_0447.jpg",
+    "stimuli/ai_generated/man_filtered/white/men_0167.jpg",
+    "stimuli/ai_generated/man_filtered/white/men_0429.jpg",
+    "stimuli/ai_generated/man_filtered/white/man_0135.jpg",
+    "stimuli/ai_generated/man_filtered/white/man_0134.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_1438.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_0068.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_0322.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_1014.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_0487.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_1015.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_0914.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_0928.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_0296.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_1016.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_1348.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_1370.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_0907.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_0913.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_0324.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_1239.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_0286.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_0051.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_0911.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_0596.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_0597.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_0554.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_0581.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_0621.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_0609.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_1336.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_1130.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_0978.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_1331.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_0172.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_0841.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_1168.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_0062.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_1432.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_0842.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_0261.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_1392.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_1408.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_1018.jpg",
+    "stimuli/ai_generated/woman_filtered/asian/woman_0501.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0445.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0135.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0096.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0446.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0250.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0251.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0086.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0087.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0291.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0236.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0168.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0031.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0179.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0030.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0018.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0437.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_1295.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0414.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0415.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0006.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_1342.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0074.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0504.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0262.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0276.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0260.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_1426.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0089.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0466.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0117.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_1341.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0249.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0261.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0488.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0489.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_1422.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0502.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0064.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0110.jpg",
+    "stimuli/ai_generated/woman_filtered/black/woman_0065.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_0450.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_0645.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_1228.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_0081.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_1370.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_0085.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_1204.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_0654.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_0324.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_0325.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_0285.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_0553.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_1498.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_0619.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_1317.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_1065.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_1066.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_0609.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_1488.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_1445.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_0438.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_1086.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_0775.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_1084.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_1085.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_1196.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_0667.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_1197.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_0504.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_1433.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_0711.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_0259.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_0106.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_0927.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_0070.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_0931.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_1232.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_0460.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_0306.jpg",
+    "stimuli/ai_generated/woman_filtered/latino/woman_1421.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0282.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0240.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0052.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0047.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0253.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0246.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0787.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0036.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0222.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0746.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0632.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0197.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0801.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0182.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0141.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0223.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0019.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0811.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0795.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_1136.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_1283.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0201.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0983.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0149.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_1294.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_1083.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0799.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0986.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_1326.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0159.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0011.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_1455.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0007.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0365.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_1090.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0317.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0276.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0260.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0248.jpg",
+    "stimuli/ai_generated/woman_filtered/white/woman_0104.jpg"
+    ];
+
+    // ========= Fold logic =========
+    function shuffle(arr) { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; }
+    function hashString(str) { let h = 5381; for (let i = 0; i < str.length; i++) { h=((h<<5)+h)+str.charCodeAt(i); h &= 0xffffffff; } return Math.abs(h); }
+    function getGenderAndEthnicity(path) { const parts = path.split("/"); const genderFiltered = parts[2]; const ethnicity = parts[3]; const gender = genderFiltered.startsWith("man") ? "man" : "woman"; return { gender, ethnicity }; }
+    function buildBuckets(paths) {
+      const buckets = { man:{asian:[],black:[],latino:[],white:[]}, woman:{asian:[],black:[],latino:[],white:[]} };
+      for (const p of paths) { const { gender, ethnicity } = getGenderAndEthnicity(p); if (buckets[gender] && buckets[gender][ethnicity]) buckets[gender][ethnicity].push(p); }
+      return buckets;
+    }
+    function deterministicSort(arr){ return arr.slice().sort(); }
+    function splitIntoFolds(buckets, perCell){
+      const sizes=[]; for (const g of ["man","woman"]) for (const e of ["asian","black","latino","white"]) {
+        const n=buckets[g][e].length; if (n<perCell) throw new Error(`Bucket short: ${g}/${e} has ${n}, needs ≥ ${perCell}.`); sizes.push(Math.floor(n/perCell));
+      }
+      const K=Math.min(...sizes); if (K<1) throw new Error("Not enough images to create even a single fold.");
+      const folds=Array.from({length:K},()=>({man:{asian:[],black:[],latino:[],white:[]},woman:{asian:[],black:[],latino:[],white:[]}}));
+      for (const g of ["man","woman"]) for (const e of ["asian","black","latino","white"]) {
+        const ordered=deterministicSort(buckets[g][e]); const needed=K*perCell; if (ordered.length<needed) throw new Error(`Bucket ${g}/${e} needs ${needed} images (has ${ordered.length}).`);
+        for (let k=0;k<K;k++){ const start=k*perCell, end=start+perCell; folds[k][g][e]=ordered.slice(start,end); }
+      }
+      return {folds,K};
+    }
+
+    // ========= Firestore helpers (from module) =========
+    const { imageDoc, ensureImageDoc, reserveImage } = window.__FS_HELPERS__;
+
+    async function getEligibleImagePaths(paths) {
+      const results = [];
+      for (const p of paths) {
+        const data = await ensureImageDoc(p);
+        const cnt = data?.count || 0;
+        if (cnt < TARGET_RATINGS) results.push({ path: p, count: cnt });
+      }
+      results.sort((a,b)=>a.count-b.count || a.path.localeCompare(b.path));
+      return results.map(r=>r.path);
+    }
+
+    async function buildAssignedSetRespectingCaps(paths, participantId, perCell = PER_CELL) {
+      const underCap = await getEligibleImagePaths(paths);
+      const buckets = buildBuckets(underCap);
+      const { folds, K } = splitIntoFolds(buckets, perCell);
+      const id = (participantId && participantId !== "unknown") ? participantId : ("" + Math.random());
+      const foldIndex = hashString(id) % K;
+      const candidate = [];
+      for (const g of ["man","woman"]) for (const e of ["asian","black","latino","white"]) candidate.push(...folds[foldIndex][g][e]);
+      return shuffle(candidate);
+    }
+
+    // ========= UI / Task =========
+    const defaultSliderValue = 50;
+    let shuffledImages = [];
+    let totalImages = 0;
+    let currentIndex = 0;
+    let startTime = null;
+    let currentImage = null;
+    let participantId = null;
+
+    const elProgress = document.getElementById("progress");
+    const elImg = document.getElementById("imageToRate");
+    const elSlider = document.getElementById("slider");
+    const elConf = document.getElementById("confidenceSlider");
+    const elNext = document.getElementById("nextButton");
+
+    function getProlificID() {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get("PROLIFIC_PID") || "unknown";
+    }
+
+    const responseData = { participant_id: null, responses: [] };
+
+    function updateProgress() {
+      elProgress.textContent = `Image ${Math.min(currentIndex + 1, totalImages)} of ${totalImages} (aim: ${TARGET_RATINGS}/image)`;
+      elNext.textContent = (currentIndex >= totalImages - 1) ? "Finish" : "Next Image";
+    }
+
+    function showConfirmationPage() {
+      document.getElementById("ratingInterface").classList.add("hidden");
+      document.getElementById("confirmationPage").classList.remove("hidden");
+      window.parent.postMessage({ type: "ai_image_rating_data", payload: responseData }, "*");
+    }
+
+    async function getNextReservableImage(startIdx) {
+      for (let i = startIdx; i < shuffledImages.length; i++) {
+        const img = shuffledImages[i];
+        const res = await reserveImage(img, participantId, TARGET_RATINGS);
+        if (res.ok) return { index: i, path: img };
+      }
+      return null;
+    }
+
+    async function loadNextImage() {
+      const next = await getNextReservableImage(currentIndex);
+      if (!next) { showConfirmationPage(); return; }
+      currentIndex = next.index + 1;
+      currentImage = next.path;
+
+      elImg.src = currentImage;
+      elSlider.value = defaultSliderValue;
+      elConf.value = defaultSliderValue;
+      elNext.disabled = true;
+      startTime = Date.now();
+      updateProgress();
+    }
+
+    async function submitResponse() {
+      const endTime = Date.now();
+      const timeTaken = ((endTime - startTime) / 1000).toFixed(2);
+      const sliderValue = elSlider.value;
+      const confidenceValue = elConf.value;
+      const groundTruth = currentImage.includes("ai_generated") ? "Yes" : "No";
+
+      responseData.responses.push({
+        image: currentImage,
+        rating: sliderValue,
+        confidence: confidenceValue,
+        time: parseFloat(timeTaken),
+        ground_truth_ai: groundTruth
+      });
+
+      await loadNextImage();
+    }
+
+    function checkInputCompletion() {
+      const ratingMoved = elSlider.value != defaultSliderValue;
+      const confidenceMoved = elConf.value != defaultSliderValue;
+      elNext.disabled = !(ratingMoved && confidenceMoved);
+    }
+
+    // ========= Bootstrap =========
+    async function init() {
+      const { onAuthStateChanged, signInAnonymously, auth } = window.__FIREBASE__;
+      elProgress.textContent = "Initializing…";
+
+      await signInAnonymously(auth).catch((e) => console.error("Anon sign-in failed", e));
+
+      onAuthStateChanged(auth, async (user) => {
+        if (!user) return;
+        participantId = getProlificID() || user.uid;
+        responseData.participant_id = participantId;
+
+        try {
+          shuffledImages = await buildAssignedSetRespectingCaps(imagePaths, participantId, PER_CELL);
+          totalImages = shuffledImages.length;  // might be < 40 near completion
+          await loadNextImage();
+        } catch (e) {
+          console.error(e);
+          alert(e.message || "Initialization error.");
+        }
+      });
+    }
+
+    elSlider.addEventListener("input", checkInputCompletion);
+    elConf.addEventListener("input", checkInputCompletion);
+    elNext.addEventListener("click", submitResponse);
+    window.addEventListener("load", () => { init(); });
+  </script>
+</body>
+</html>
