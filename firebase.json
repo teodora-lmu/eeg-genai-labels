@@ -1,6 +1,15 @@
 {
   "hosting": {
     "public": "public",
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          { "key": "Content-Security-Policy",
+            "value": "frame-ancestors 'self' https://*.qualtrics.com https://*.qualtricsusercontent.com" }
+        ]
+      }
+    ],
     "ignore": [
       "firebase.json",
       "**/.*",
