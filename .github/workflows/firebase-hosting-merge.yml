@@ -12,9 +12,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies (if package.json exists)
-                if: ${{ hashFiles('**/package.json') != '' }}
-                run: npm ci
-
+          if: ${{ hashFiles('**/package.json') != '' }}
+          run: npm ci
       - name: Build (if package.json exists)
         if: ${{ hashFiles('**/package.json') != '' }}
         run: npm run build
