@@ -487,14 +487,20 @@
       currentIndex = next.index + 1;
       currentImage = next.path;
 
+      // Show current image
       elImg.src = currentImage;
       elSlider.value = defaultSliderValue;
       elConf.value = defaultSliderValue;
       elNext.disabled = true;
       startTime = Date.now();
       updateProgress();
-    }
 
+    // 🔽 Preload next image if available
+    if (currentIndex < shuffledImages.length) {
+      const preload = new Image();
+      preload.src = shuffledImages[currentIndex];
+    }
+}
     async function submitResponse() {
       const endTime = Date.now();
       const timeTaken = ((endTime - startTime) / 1000).toFixed(2);
