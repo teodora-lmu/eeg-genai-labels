@@ -423,7 +423,7 @@
     }
 
     // ===================== FIREBASE HELPERS =====================
-    const { onAuthStateChanged, signInAnonymously, auth } = window.__FIREBASE__;
+    
 
     // ===================== APP STATE =====================
     const defaultSliderValue = 50;
@@ -498,6 +498,7 @@
 
     // ===================== INIT =====================
     async function init() {
+      const { onAuthStateChanged, signInAnonymously, auth } = window.__FIREBASE__;
       elProgress.textContent = "Initializing…";
 
       await signInAnonymously(auth).catch(console.error);
