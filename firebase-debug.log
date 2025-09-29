@@ -1,0 +1,45 @@
+[debug] [2025-09-29T21:08:21.871Z] ----------------------------------------------------------------------
+[debug] [2025-09-29T21:08:21.877Z] Command:       /Users/teodoramitrevska/.nvm/versions/node/v20.19.5/bin/node /Users/teodoramitrevska/.nvm/versions/node/v16.18.0/bin/firebase serve
+[debug] [2025-09-29T21:08:21.877Z] CLI Version:   14.17.0
+[debug] [2025-09-29T21:08:21.877Z] Platform:      darwin
+[debug] [2025-09-29T21:08:21.877Z] Node Version:  v20.19.5
+[debug] [2025-09-29T21:08:21.877Z] Time:          Mon Sep 29 2025 23:08:21 GMT+0200 (Central European Summer Time)
+[debug] [2025-09-29T21:08:21.877Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2025-09-29T21:08:22.028Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-09-29T21:08:22.028Z] > authorizing via signed-in user (tmitrevska97@gmail.com)
+[debug] [2025-09-29T21:08:22.028Z] [iam] checking project ai-labels-4a313 for permissions ["firebase.projects.get"]
+[debug] [2025-09-29T21:08:22.029Z] Checked if tokens are valid: true, expires at: 1759181394380
+[debug] [2025-09-29T21:08:22.029Z] Checked if tokens are valid: true, expires at: 1759181394380
+[debug] [2025-09-29T21:08:22.029Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/ai-labels-4a313:testIamPermissions [none]
+[debug] [2025-09-29T21:08:22.029Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/ai-labels-4a313:testIamPermissions x-goog-quota-user=projects/ai-labels-4a313
+[debug] [2025-09-29T21:08:22.030Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/ai-labels-4a313:testIamPermissions {"permissions":["firebase.projects.get"]}
+[debug] [2025-09-29T21:08:23.172Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/ai-labels-4a313:testIamPermissions 200
+[debug] [2025-09-29T21:08:23.172Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/ai-labels-4a313:testIamPermissions {"permissions":["firebase.projects.get"]}
+[debug] [2025-09-29T21:08:23.173Z] Checked if tokens are valid: true, expires at: 1759181394380
+[debug] [2025-09-29T21:08:23.173Z] Checked if tokens are valid: true, expires at: 1759181394380
+[debug] [2025-09-29T21:08:23.173Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/projects/ai-labels-4a313 [none]
+[debug] [2025-09-29T21:08:23.414Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/ai-labels-4a313 200
+[debug] [2025-09-29T21:08:23.414Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/projects/ai-labels-4a313 {"projectNumber":"229680043437","projectId":"ai-labels-4a313","lifecycleState":"ACTIVE","name":"ai-labels","labels":{"firebase":"enabled","firebase-core":"disabled"},"createTime":"2025-09-26T10:23:19.720978Z"}
+[info] 
+[info] === Serving from '/Users/teodoramitrevska/Desktop/Experiments/psychopy_ai_labels/eeg-genai-labels/eeg-genai-labels'...
+[info] 
+[debug] [2025-09-29T21:08:23.416Z] Checked if tokens are valid: true, expires at: 1759181394380
+[debug] [2025-09-29T21:08:23.416Z] Checked if tokens are valid: true, expires at: 1759181394380
+[debug] [2025-09-29T21:08:23.417Z] >>> [apiv2][query] GET https://firebasehosting.googleapis.com/v1beta1/projects/ai-labels-4a313/sites 
+[debug] [2025-09-29T21:08:24.550Z] <<< [apiv2][status] GET https://firebasehosting.googleapis.com/v1beta1/projects/ai-labels-4a313/sites 200
+[debug] [2025-09-29T21:08:24.551Z] <<< [apiv2][body] GET https://firebasehosting.googleapis.com/v1beta1/projects/ai-labels-4a313/sites {"sites":[{"name":"projects/ai-labels-4a313/sites/ai-labels-4a313","defaultUrl":"https://ai-labels-4a313.web.app","appId":"1:229680043437:web:2d81f60469fd08b3213d24","type":"DEFAULT_SITE"}]}
+[debug] [2025-09-29T21:08:24.551Z] Checked if tokens are valid: true, expires at: 1759181394380
+[debug] [2025-09-29T21:08:24.551Z] Checked if tokens are valid: true, expires at: 1759181394380
+[debug] [2025-09-29T21:08:24.551Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/ai-labels-4a313/webApps/1:229680043437:web:2d81f60469fd08b3213d24/config [none]
+[debug] [2025-09-29T21:08:25.324Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/ai-labels-4a313/webApps/1:229680043437:web:2d81f60469fd08b3213d24/config 200
+[debug] [2025-09-29T21:08:25.324Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/ai-labels-4a313/webApps/1:229680043437:web:2d81f60469fd08b3213d24/config {"projectId":"ai-labels-4a313","appId":"1:229680043437:web:2d81f60469fd08b3213d24","storageBucket":"ai-labels-4a313.firebasestorage.app","apiKey":"AIzaSyDZ2S2cdztJc7Xh9PKBHHtSJP5Z-ZitRHY","authDomain":"ai-labels-4a313.firebaseapp.com","messagingSenderId":"229680043437"}
+[debug] [2025-09-29T21:08:25.332Z] Checked if tokens are valid: true, expires at: 1759181394380
+[debug] [2025-09-29T21:08:25.333Z] Checked if tokens are valid: true, expires at: 1759181394380
+[debug] [2025-09-29T21:08:25.333Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/ai-labels-4a313 [none]
+[debug] [2025-09-29T21:08:25.569Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/ai-labels-4a313 200
+[debug] [2025-09-29T21:08:25.569Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/ai-labels-4a313 {"projectId":"ai-labels-4a313","projectNumber":"229680043437","displayName":"ai-labels","name":"projects/ai-labels-4a313","resources":{"hostingSite":"ai-labels-4a313"},"state":"ACTIVE","etag":"1_2e43b918-217f-48da-ba4b-3b18c3b10e68"}
+[info] i  hosting[ai-labels-4a313]: Serving hosting files from: public {"metadata":{"emulator":{"name":"hosting"},"message":"Serving hosting files from: \u001b[1mpublic\u001b[22m"}}
+[info] ✔  hosting[ai-labels-4a313]: Local server: http://localhost:5002 {"metadata":{"emulator":{"name":"hosting"},"message":"Local server: \u001b[4m\u001b[1mhttp://localhost:5002\u001b[22m\u001b[24m"}}
+[info] i  hosting: ::1 - - [29/Sep/2025:21:08:30 +0000] "GET / HTTP/1.1" 200 - "-" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15" {"metadata":{"emulator":{"name":"hosting"},"message":"::1 - - [29/Sep/2025:21:08:30 +0000] \"GET / HTTP/1.1\" 200 - \"-\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15\""}}
+[info] i  hosting: ::1 - - [29/Sep/2025:21:08:34 +0000] "GET / HTTP/1.1" 200 - "-" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15" {"metadata":{"emulator":{"name":"hosting"},"message":"::1 - - [29/Sep/2025:21:08:34 +0000] \"GET / HTTP/1.1\" 200 - \"-\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15\""}}

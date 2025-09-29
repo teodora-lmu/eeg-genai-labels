@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>AI Image Rating Task</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    .container { max-width: 700px; margin: auto; }
+    img { width: 100%; max-height: 320px; object-fit: contain; margin-bottom: 20px; border-radius: 6px; }
+    .slider-labels { display: flex; justify-content: space-between; font-size: 0.9em; color: #555; margin-bottom: 6px; }
+    #slider, #confidenceSlider { width: 100%; }
+    #nextButton { padding: 10px 16px; font-size: 1rem; border: none; border-radius: 6px; background: #2d6cdf; color: #fff; }
+    #nextButton:disabled { background-color: #ccc; cursor: not-allowed; }
+    #progress { font-size: 0.9em; color: #333; margin-bottom: 10px; text-align: right; }
+    .hidden { display: none; }
+    .note { font-size: 0.9em; color: #555; margin-bottom: 8px; }
+  </style>
+
+  <!-- Firebase SDK (ESM) -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+    import {
+      getFirestore, doc, getDoc, setDoc, runTransaction
+    } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDZ2S2cdztJc7Xh9PKBHHtSJP5Z-ZitRHY",
+      authDomain: "ai-labels-4a313.firebaseapp.com",
+      projectId: "ai-labels-4a313",
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    window.__FIREBASE__ = { db, auth, onAuthStateChanged, signInAnonymously };
+  </script>
+</head>
+<body>
+  <div class="container">
+    <div class="note">Target: <strong>30 ratings per image</strong>. Images stop showing once full.</div>
+    <div id="ratingInterface">
+      <div id="progress">Loading…</div>
+      <img id="imageToRate" src="" alt="Image to rate" />
+
+      <p><strong>This image was created with the help of generative AI.</strong></p>
+
+      <div class="slider-section">
+        <div class="slider-labels">
+          <span>Strongly Disagree</span>
+          <span>Strongly Agree</span>
+        </div>
+        <input type="range" id="slider" min="1" max="100" value="50" />
+      </div>
+
+      <br />
+      <label for="confidenceSlider"><strong>I am confident in my response.</strong></label>
+      <div class="slider-labels">
+        <span>Strongly Disagree</span>
+        <span>Strongly Agree</span>
+      </div>
+      <input type="range" id="confidenceSlider" min="1" max="100" value="50" />
+
+      <br /><br />
+      <button id="nextButton" disabled>Next Image</button>
+    </div>
+
+    <div id="confirmationPage" class="hidden">
+      <h2>Thank you!</h2>
+      <p>You have rated all available images. Please click the arrow below to continue.</p>
+    </div>
+  </div>
+
+  <script>
+    // ===================== PARAMETERS =====================
+    const TARGET_RATINGS = 30;
+    const PER_CELL = 5;
+
+
+
+    // 🔽 Your full image path list
+    const imagePaths = [// ✅ Only include images that are still below 30 ratings
+
+      // ---- 15 ratings ----
+      "stimuli/ai_generated/man_filtered/asian/men_0427.jpg",
+      "stimuli/ai_generated/man_filtered/asian/men_0433.jpg",
+      "stimuli/ai_generated/man_filtered/asian/men_0470.jpg",
+      "stimuli/ai_generated/man_filtered/asian/men_0548.jpg",
+      "stimuli/ai_generated/man_filtered/asian/men_0561.jpg",
+      "stimuli/ai_generated/man_filtered/black/man_1006.jpg",
+      "stimuli/ai_generated/man_filtered/black/man_1056.jpg",
+      "stimuli/ai_generated/man_filtered/black/man_1069.jpg",
+      "stimuli/ai_generated/man_filtered/black/man_1127.jpg",
+      "stimuli/ai_generated/man_filtered/black/man_1140.jpg",
+      "stimuli/ai_generated/man_filtered/latino/men_0606.jpg",
+      "stimuli/ai_generated/man_filtered/latino/men_0949.jpg",
+      "stimuli/ai_generated/man_filtered/latino/men_0955.jpg",
+      "stimuli/ai_generated/man_filtered/latino/men_0962.jpg",
+      "stimuli/ai_generated/man_filtered/latino/men_0984.jpg",
+      "stimuli/ai_generated/man_filtered/white/man_0447.jpg",
+      "stimuli/ai_generated/man_filtered/white/man_0596.jpg",
+      "stimuli/ai_generated/man_filtered/white/man_0633.jpg",
+      "stimuli/ai_generated/man_filtered/white/man_0636.jpg",
+      "stimuli/ai_generated/man_filtered/white/man_0703.jpg",
+      "stimuli/ai_generated/woman_filtered/asian/woman_0911.jpg",
+      "stimuli/ai_generated/woman_filtered/asian/woman_0913.jpg",
+      "stimuli/ai_generated/woman_filtered/asian/woman_0914.jpg",
+      "stimuli/ai_generated/woman_filtered/asian/woman_0928.jpg",
+      "stimuli/ai_generated/woman_filtered/asian/woman_0978.jpg",
+      "stimuli/ai_generated/woman_filtered/black/woman_0260.jpg",
+      "stimuli/ai_generated/woman_filtered/black/woman_0261.jpg",
+      "stimuli/ai_generated/woman_filtered/black/woman_0262.jpg",
+      "stimuli/ai_generated/woman_filtered/black/woman_0276.jpg",
+      "stimuli/ai_generated/woman_filtered/black/woman_0291.jpg",
+      "stimuli/ai_generated/woman_filtered/latino/woman_0775.jpg",
+      "stimuli/ai_generated/woman_filtered/latino/woman_0927.jpg",
+      "stimuli/ai_generated/woman_filtered/latino/woman_0931.jpg",
+      "stimuli/ai_generated/woman_filtered/latino/woman_1065.jpg",
+      "stimuli/ai_generated/woman_filtered/latino/woman_1066.jpg",
+      "stimuli/ai_generated/woman_filtered/white/woman_0276.jpg",
+      "stimuli/ai_generated/woman_filtered/white/woman_0282.jpg",
+      "stimuli/ai_generated/woman_filtered/white/woman_0317.jpg",
+      "stimuli/ai_generated/woman_filtered/white/woman_0365.jpg",
+      "stimuli/ai_generated/woman_filtered/white/woman_0632.jpg",
+
+      // ---- 17 ratings ----
+      "stimuli/ai_generated/man_filtered/asian/men_0233.jpg",
+      "stimuli/ai_generated/man_filtered/asian/men_0243.jpg",
+      "stimuli/ai_generated/man_filtered/asian/men_0255.jpg",
+      "stimuli/ai_generated/man_filtered/asian/men_0258.jpg",
+      "stimuli/ai_generated/man_filtered/asian/men_0261.jpg",
+      "stimuli/ai_generated/man_filtered/asian/men_0825.jpg",
+      "stimuli/ai_generated/man_filtered/asian/men_1068.jpg",
+      "stimuli/ai_generated/man_filtered/asian/men_1077.jpg",
+      "stimuli/ai_generated/man_filtered/asian/men_1116.jpg",
+      "stimuli/ai_generated/man_filtered/asian/men_1123.jpg",
+      "stimuli/ai_generated/man_filtered/black/man_0861.jpg",
+      "stimuli/ai_generated/man_filtered/black/man_0886.jpg",
+      "stimuli/ai_generated/man_filtered/black/man_0887.jpg",
+      "stimuli/ai_generated/man_filtered/black/man_0897.jpg",
+      "stimuli/ai_generated/man_filtered/black/man_0899.jpg",
+      "stimuli/ai_generated/man_filtered/black/men_0242.jpg",
+      "stimuli/ai_generated/man_filtered/black/men_0249.jpg",
+      "stimuli/ai_generated/man_filtered/black/men_0313.jpg",
+      "stimuli/ai_generated/man_filtered/black/men_0358.jpg",
+      "stimuli/ai_generated/black/men_0379.jpg",
+      "stimuli/ai_generated/latino/men_0261.jpg",
+      "stimuli/ai_generated/latino/men_0349.jpg",
+
+      // ---- 19 ratings ----
+      "stimuli/ai_generated/man_filtered/asian/man_0904.jpg",
+      "stimuli/ai_generated/man_filtered/asian/man_1186.jpg",
+      "stimuli/ai_generated/man_filtered/asian/men_0054.jpg",
+      "stimuli/ai_generated/man_filtered/asian/men_0057.jpg",
+      "stimuli/ai_generated/man_filtered/asian/men_0077.jpg",
+      "stimuli/ai_generated/black/man_0516.jpg",
+      "stimuli/ai_generated/black/man_0583.jpg",
+      "stimuli/ai_generated/black/man_0584.jpg",
+      "stimuli/ai_generated/black/man_0587.jpg",
+      "stimuli/ai_generated/black/man_0592.jpg",
+      "stimuli/ai_generated/latino/man_0608.jpg",
+      "stimuli/ai_generated/latino/man_0630.jpg",
+      "stimuli/ai_generated/latino/man_0632.jpg",
+      "stimuli/ai_generated/latino/man_0633.jpg",
+      "stimuli/ai_generated/latino/man_0713.jpg",
+      "stimuli/ai_generated/white/man_0042.jpg",
+      "stimuli/ai_generated/white/man_0061.jpg",
+      "stimuli/ai_generated/white/man_0103.jpg",
+      "stimuli/ai_generated/white/man_0134.jpg",
+      "stimuli/ai_generated/white/man_0135.jpg",
+      "stimuli/ai_generated/woman_filtered/asian/woman_0051.jpg",
+      "stimuli/ai_generated/woman_filtered/asian/woman_0062.jpg",
+
+      // ---- 25 ratings ----
+      "stimuli/ai_generated/man_filtered/asian/men_0269.jpg",
+      "stimuli/ai_generated/man_filtered/asian/men_0296.jpg",
+      "stimuli/ai_generated/man_filtered/asian/men_0367.jpg",
+      "stimuli/ai_generated/man_filtered/asian/men_0387.jpg",
+      "stimuli/ai_generated/man_filtered/asian/men_0426.jpg",
+      "stimuli/ai_generated/black/man_0909.jpg",
+      "stimuli/ai_generated/black/man_0921.jpg",
+      "stimuli/ai_generated/black/man_0941.jpg",
+      "stimuli/ai_generated/black/man_0963.jpg",
+      "stimuli/ai_generated/black/man_0993.jpg",
+      "stimuli/ai_generated/latino/men_0444.jpg",
+      "stimuli/ai_generated/latino/men_0477.jpg",
+      "stimuli/ai_generated/latino/men_0501.jpg",
+      "stimuli/ai_generated/latino/men_0503.jpg",
+      "stimuli/ai_generated/latino/men_0515.jpg",
+      "stimuli/ai_generated/white/man_0285.jpg",
+      "stimuli/ai_generated/white/man_0292.jpg",
+      "stimuli/ai_generated/white/man_0293.jpg",
+      "stimuli/ai_generated/white/man_0344.jpg",
+      "stimuli/ai_generated/white/man_0356.jpg",
+      "stimuli/ai_generated/woman_filtered/asian/woman_0609.jpg",
+      "stimuli/ai_generated/woman_filtered/asian/woman_0621.jpg",
+
+      // ---- 26 ratings ----
+      "stimuli/ai_generated/man_filtered/asian/men_0580.jpg",
+      "stimuli/ai_generated/man_filtered/asian/men_0739.jpg",
+      "stimuli/ai_generated/man_filtered/asian/men_0750.jpg",
+      "stimuli/ai_generated/man_filtered/asian/men_0757.jpg",
+      "stimuli/ai_generated/man_filtered/asian/men_0758.jpg",
+      "stimuli/ai_generated/black/men_0005.jpg",
+      "stimuli/ai_generated/black/men_0070.jpg",
+      "stimuli/ai_generated/black/men_0082.jpg",
+      "stimuli/ai_generated/black/men_0182.jpg",
+      "stimuli/ai_generated/black/men_0198.jpg",
+      "stimuli/ai_generated/latino/men_1063.jpg",
+      "stimuli/ai_generated/latino/men_1073.jpg",
+      "stimuli/ai_generated/latino/men_1118.jpg",
+      "stimuli/ai_generated/latino/men_1141.jpg",
+      "stimuli/ai_generated/latino/men_1200.jpg",
+      "stimuli/ai_generated/white/man_0712.jpg",
+      "stimuli/ai_generated/white/men_0032.jpg",
+      "stimuli/ai_generated/white/men_0064.jpg",
+      "stimuli/ai_generated/white/men_0112.jpg",
+      "stimuli/ai_generated/white/men_0147.jpg",
+      "stimuli/ai_generated/woman_filtered/asian/woman_1014.jpg",
+      "stimuli/ai_generated/woman_filtered/asian/woman_1015.jpg"
+    ];
+
+
+
+    // ===================== IMAGE PRELOADING =====================
+    async function preloadImagesWithProgress(paths) {
+      const elProgress = document.getElementById("progress");
+      let loaded = 0;
+      for (const path of paths) {
+        await new Promise((resolve, reject) => {
+          const img = new Image();
+          img.src = path;
+          img.onload = () => {
+            loaded++;
+            elProgress.textContent = `Preloading ${loaded}/${paths.length}`;
+            resolve();
+          };
+          img.onerror = reject;
+        });
+      }
+    }
+
+    // ===================== FIREBASE HELPERS =====================
+    
+
+    // ===================== APP STATE =====================
+    const defaultSliderValue = 50;
+    let shuffledImages = [];
+    let totalImages = 0;
+    let currentIndex = 0;
+    let startTime = null;
+    let currentImage = null;
+    let participantId = null;
+
+    const elProgress = document.getElementById("progress");
+    const elImg = document.getElementById("imageToRate");
+    const elSlider = document.getElementById("slider");
+    const elConf = document.getElementById("confidenceSlider");
+    const elNext = document.getElementById("nextButton");
+
+    const responseData = { participant_id: null, responses: [] };
+
+    function getProlificID() {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get("PROLIFIC_PID") || "unknown";
+    }
+
+    function updateProgress() {
+      elProgress.textContent =
+        `Image ${Math.min(currentIndex + 1, totalImages)} of ${totalImages}`;
+      elNext.textContent = (currentIndex >= totalImages - 1) ? "Finish" : "Next Image";
+    }
+
+    function showConfirmationPage() {
+      document.getElementById("ratingInterface").classList.add("hidden");
+      document.getElementById("confirmationPage").classList.remove("hidden");
+      window.parent.postMessage({ type: "ai_image_rating_data", payload: responseData }, "*");
+    }
+
+    function loadNextImage() {
+      if (currentIndex >= totalImages) {
+        showConfirmationPage();
+        return;
+      }
+
+      currentImage = shuffledImages[currentIndex];
+      elImg.src = currentImage;
+      elSlider.value = defaultSliderValue;
+      elConf.value = defaultSliderValue;
+      elNext.disabled = true;
+      startTime = Date.now();
+      updateProgress();
+    }
+
+    function submitResponse() {
+      const endTime = Date.now();
+      const timeTaken = ((endTime - startTime) / 1000).toFixed(2);
+
+      responseData.responses.push({
+        image: currentImage,
+        rating: elSlider.value,
+        confidence: elConf.value,
+        time: parseFloat(timeTaken),
+        ground_truth_ai: currentImage.includes("ai_generated") ? "Yes" : "No"
+      });
+
+      currentIndex++;
+      loadNextImage();
+    }
+
+    function checkInputCompletion() {
+      const ratingMoved = elSlider.value != defaultSliderValue;
+      const confidenceMoved = elConf.value != defaultSliderValue;
+      elNext.disabled = !(ratingMoved && confidenceMoved);
+    }
+
+    // ===================== INIT =====================
+    async function init() {
+      const { onAuthStateChanged, signInAnonymously, auth } = window.__FIREBASE__;
+      elProgress.textContent = "Initializing…";
+
+      await signInAnonymously(auth).catch(console.error);
+      onAuthStateChanged(auth, async (user) => {
+        if (!user) return;
+        participantId = getProlificID() || user.uid;
+        responseData.participant_id = participantId;
+
+        shuffledImages = imagePaths.sort(() => 0.5 - Math.random());
+        totalImages = shuffledImages.length;
+
+        // ✅ Preload all images first
+        await preloadImagesWithProgress(shuffledImages);
+
+        // Start task
+        loadNextImage();
+      });
+    }
+
+    elSlider.addEventListener("input", checkInputCompletion);
+    elConf.addEventListener("input", checkInputCompletion);
+    elNext.addEventListener("click", submitResponse);
+
+    window.addEventListener("load", () => { init(); });
+  </script>
+</body>
+</html>
