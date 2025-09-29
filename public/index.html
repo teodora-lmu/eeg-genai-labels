@@ -393,7 +393,6 @@
     "stimuli/ai_generated/woman_filtered/white/woman_0104.jpg"
     ];
 
-
     // ========= Fold logic =========
     function shuffle(arr) { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; }
     function hashString(str) { let h = 5381; for (let i = 0; i < str.length; i++) { h=((h<<5)+h)+str.charCodeAt(i); h &= 0xffffffff; } return Math.abs(h); }
